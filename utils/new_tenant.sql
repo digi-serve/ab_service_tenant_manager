@@ -601,7 +601,7 @@ LOCK TABLES `AB_JOINMN_ROLE_USER_users` WRITE;
 INSERT INTO `AB_JOINMN_ROLE_USER_users` (`id`, `created_at`, `updated_at`, `USER`, `ROLE`)
 VALUES
   (1,NULL,NULL,'##admin-username##','dd6c2d34-0982-48b7-bc44-2456474edbea'),
-  (1,NULL,NULL,'##admin-username##','6cc04894-a61b-4fb5-b3e5-b8c3f78bd331');
+  (2,NULL,NULL,'##admin-username##','6cc04894-a61b-4fb5-b3e5-b8c3f78bd331');
 
 /*!40000 ALTER TABLE `AB_JOINMN_ROLE_USER_users` ENABLE KEYS */;
 UNLOCK TABLES;

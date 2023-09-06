@@ -46,7 +46,7 @@ jobs:
           body: ${{ steps.release-notes.outputs.notes }}
           token: ${{ secrets.GITHUB_TOKEN }}
   call-docker-build:
-    uses: digi-serve/.github/.github/workflows/docker-build.yml@nh/common-workflows
+    uses: digi-serve/.github/.github/workflows/docker-build.yml@master
     needs: [call-bump-version]
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}

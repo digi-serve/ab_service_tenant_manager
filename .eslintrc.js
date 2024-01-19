@@ -21,7 +21,7 @@ module.exports = {
    },
 
    parserOptions: {
-      ecmaVersion: 8,
+      ecmaVersion: 2020,
    },
    root: true,
 

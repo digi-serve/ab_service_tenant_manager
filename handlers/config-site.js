@@ -324,10 +324,6 @@ function RequestConfigTenant(req, config) {
       req.data = req.data || {};
       req.data.uuid = req.tenantID();
 
-      console.log(":::::::: req.toObj() :::::::");
-      console.log(req.toObj());
-      console.log("::::::::::::::::::::::::::::");
-
       // pass the request off to the uService:
       TMConfig.fn(req, (err, results) => {
          if (err) return reject(err);

@@ -4,7 +4,7 @@
  */
 const AB = require("@digiserve/ab-utils");
 const async = require("async");
-const fs = require("fs");
+const fs = require("fs").promises;
 const path = require("path");
 const sqlCreateTenant = require("../queries/createTenant.js");
 const sqlFindTenantByKey = require("../queries/findTenantByKey.js");
@@ -53,178 +53,297 @@ module.exports = {
     * @param {fn} cb
     *        a node style callback(err, results) to send data when job is finished
     */
-   fn: function handler(req, cb) {
+   fn: async function handler(req, cb) {
       //
       req.log("tenant_manager.tenant-add()");
       var AdminData = {};
       var fileName = "";
 
-      async.series(
-         [
-            // Verify Key is Unique
-            (done) => {
-               sqlFindTenantByKey(req, req.param("key")).then((list) => {
-                  if (list.length > 0) {
-                     var errorNotUnique = new Error("Key is not unique");
-                     done(errorNotUnique);
-                     return;
-                  }
-                  done();
-               });
-            },
-            // Create a new Entry in the site_tenant table
-            (done) => {
-               req.log("Creating Tenant");
-               var data = {
-                  key: req.param("key"),
-                  title: req.param("title"),
-                  authType: req.param("authType"),
-                  url: req.param("url"),
-               };
-               sqlCreateTenant(req, data)
-                  .then((/* sqlResults */) => {
-                     sqlFindTenantByKey(req, data.key)
-                        .then((list) => {
-                           var newTenant = list[0] || list;
-                           AdminData["##key##"] = newTenant.uuid;
-                           done();
-                        })
-                        .catch(done);
-                  })
-                  .catch(done);
-            },
-
-            // compile our new Admin Data:
-            (done) => {
-               req.log("generating new tenant password");
-               AdminData["##admin-uuid##"] = AB.uuid();
-               AdminData["##admin-username##"] = req.param("username");
-               AdminData["##admin-email##"] = req.param("email");
-               AdminData["##admin-url##"] = req.param("url");
-
-               // Now find the password/salt
-               req.serviceRequest(
-                  "user_manager.new-user-password",
-                  {
-                     password: req.param("password"),
-                  },
-                  (err, results) => {
-                     if (err) {
-                        return done(err);
-                     }
-                     Object.keys(results).forEach((k) => {
-                        AdminData[`##admin-${k}##`] = results[k];
-                     });
-                     done();
-                  }
-               );
-            },
-
-            // Create a new DB for the new tenant
-            // copy our utils/new_tenant.sql  to {tenant}.sql with details replaced
-            (done) => {
-               req.log("generating new tenant SQL");
-               fs.readFile(
-                  path.join(__dirname, "..", "utils", "new_tenant.sql"),
-                  "utf8",
-                  (err, contents) => {
-                     if (err) {
-                        return done(err);
-                     }
-
-                     // contents is a template that we must now fill out with our data
-                     Object.keys(AdminData).forEach((k) => {
-                        contents = contents.replaceAll(k, AdminData[k]);
-                     });
-
-                     fileName = `new-${req.param("key")}.sql`;
-                     fs.writeFile(fileName, contents, (err) => {
-                        if (err) {
-                           return done(err);
-                        }
-                        done();
-                     });
-                  }
-               );
-            },
-
-            //// This works, but is SLOW:
-            // mysql import the {tenant}.sql
-            /*            (done) => {
-               req.log("Importing new tenant SQL");
-
-               var dbConfig = req.configDB();
-               var config = {
-                  host: dbConfig.host,
-                  user: dbConfig.user,
-                  password: dbConfig.password,
-               };
-               var importer = new Importer(config);
-               importer.onProgress((progress) => {
-                  var percent =
-                     Math.floor(
-                        (progress.bytes_processed / progress.total_bytes) *
-                           10000
-                     ) / 100;
-                  req.log(`${percent}% Completed`);
-               });
-
-               importer
-                  .import(fileName)
-                  .then(() => {
-                     req.log("Tables Created");
-                     done();
-                  })
-                  .catch((err) => {
-                     done(err);
-                  });
-            },
-
-*/
-
-            // Let's try to manually prepare the data and send it our own way:
-            //
-
-            // mysql import the {tenant}.sql
-            (done) => {
-               req.log("Importing new tenant SQL");
-
-               fs.readFile(fileName, "utf8", (err, contents) => {
-                  if (err) {
-                     return done(err);
-                  }
-
-                  // Reformat the C-style comments from mysqlDump
-                  // contents = contents.replaceAll(/\/\*!\d*/g, "").replaceAll(/\*\//g, "");
-                  // Remove the C-Style comments from mysqldump
-                  contents = contents.replaceAll(/\/\*!\d*.*\*\/;*/g, "");
-
-                  // Remove the # comments
-                  contents = contents.replaceAll(/[^"]#.*/g, "");
-
-                  // temp confuse the &nbsp; -> &nbsp###
-                  // the ";" will interrupt our next step of breaking things into
-                  // our base sql commands;
-                  contents = contents.replaceAll("&nbsp;", "&nbsp###");
-
-                  // break into commands:
-                  var commands = contents.split(";");
-
-                  sqlCommands(commands, req, (err) => {
-                     done(err);
-                  });
-               });
-            },
-         ],
-         (err) => {
-            req.log("Done, preparing response");
-            if (err) {
-               console.error(err);
-               return cb(err);
-            }
-            cb(null, { status: "success" });
+      try {
+         //
+         // 1) Verify Key is Unique
+         //
+         let list = await sqlFindTenantByKey(req, req.param("key"));
+         if (list.length > 0) {
+            var errorNotUnique = new Error("Key is not unique");
+            cb(errorNotUnique);
+            return;
          }
-      );
+
+         //
+         // 2) Create a new Entry in the site_tenant table
+         //
+         req.log("Creating Tenant");
+         var data = {
+            key: req.param("key"),
+            title: req.param("title"),
+            authType: req.param("authType"),
+            url: req.param("url"),
+         };
+         await sqlCreateTenant(req, data);
+
+         let listNewTenant = await sqlFindTenantByKey(req, data.key);
+         var newTenant = listNewTenant[0] || listNewTenant;
+         AdminData["##key##"] = newTenant.uuid;
+
+         //
+         // 3) compile our new Admin Data:
+         //
+         req.log("generating new tenant password");
+         AdminData["##admin-uuid##"] = AB.uuid();
+         AdminData["##admin-username##"] = req.param("username");
+         AdminData["##admin-email##"] = req.param("email");
+         AdminData["##admin-url##"] = req.param("url");
+
+         // Now find the password/salt
+         await new Promise((done, error) => {
+            req.serviceRequest(
+               "user_manager.new-user-password",
+               {
+                  password: req.param("password"),
+               },
+               (err, results) => {
+                  if (err) {
+                     return error(err);
+                  }
+                  Object.keys(results).forEach((k) => {
+                     AdminData[`##admin-${k}##`] = results[k];
+                  });
+                  done();
+               }
+            );
+         });
+
+         //
+         // 4) Prepare the SQL for the new Tenant Create a new DB for the new tenant
+         // copy our utils/new_tenant.sql  to {tenant}.sql with details replaced
+         //
+         req.log("generating new tenant SQL");
+         let contentsTemplate = await fs.readFile(
+            path.join(__dirname, "..", "utils", "new_tenant.sql"),
+            "utf8"
+         );
+         // contents is a template that we must now fill out with our data
+         Object.keys(AdminData).forEach((k) => {
+            contentsTemplate = contentsTemplate.replaceAll(k, AdminData[k]);
+         });
+
+         fileName = `new-${req.param("key")}.sql`;
+         await fs.writeFile(fileName, contentsTemplate);
+
+         //
+         // 5) Create a new DB for the new tenant
+         // copy our utils/new_tenant.sql  to {tenant}.sql with details replaced
+         //
+         req.log("Importing new tenant SQL");
+
+         let contents = await fs.readFile(fileName, "utf8");
+
+         // Reformat the C-style comments from mysqlDump
+         // contents = contents.replaceAll(/\/\*!\d*/g, "").replaceAll(/\*\//g, "");
+         // Remove the C-Style comments from mysqldump
+         contents = contents.replaceAll(/\/\*!\d*.*\*\/;*/g, "");
+
+         // Remove the # comments
+         contents = contents.replaceAll(/[^"]#.*/g, "");
+
+         // temp confuse the &nbsp; -> &nbsp###
+         // the ";" will interrupt our next step of breaking things into
+         // our base sql commands;
+         contents = contents.replaceAll("&nbsp;", "&nbsp###");
+
+         // break into commands:
+         var commands = contents.split(";");
+
+         await new Promise((done, error) => {
+            sqlCommands(commands, req, (err) => {
+               if (err) return error(err);
+               done();
+            });
+         });
+
+         cb(null, { status: "success" });
+
+         req.serviceRequest(
+            "api_sails.site-cache-stale",
+            {
+               tenantID: "all",
+            },
+            () => {}
+         );
+      } catch (e) {
+         req.notify.developer(e, {
+            context: "TenantManager:tenant-add:error adding tenant",
+         });
+         cb(e);
+      }
+
+      //       async.series(
+      //          [
+      //             // Verify Key is Unique
+      //             (done) => {
+      //                sqlFindTenantByKey(req, req.param("key")).then((list) => {
+      //                   if (list.length > 0) {
+      //                      var errorNotUnique = new Error("Key is not unique");
+      //                      done(errorNotUnique);
+      //                      return;
+      //                   }
+      //                   done();
+      //                });
+      //             },
+      //             // Create a new Entry in the site_tenant table
+      //             (done) => {
+      //                req.log("Creating Tenant");
+      //                var data = {
+      //                   key: req.param("key"),
+      //                   title: req.param("title"),
+      //                   authType: req.param("authType"),
+      //                   url: req.param("url"),
+      //                };
+      //                sqlCreateTenant(req, data)
+      //                   .then((/* sqlResults */) => {
+      //                      sqlFindTenantByKey(req, data.key)
+      //                         .then((list) => {
+      //                            var newTenant = list[0] || list;
+      //                            AdminData["##key##"] = newTenant.uuid;
+      //                            done();
+      //                         })
+      //                         .catch(done);
+      //                   })
+      //                   .catch(done);
+      //             },
+
+      //             // compile our new Admin Data:
+      //             (done) => {
+      //                req.log("generating new tenant password");
+      //                AdminData["##admin-uuid##"] = AB.uuid();
+      //                AdminData["##admin-username##"] = req.param("username");
+      //                AdminData["##admin-email##"] = req.param("email");
+      //                AdminData["##admin-url##"] = req.param("url");
+
+      //                // Now find the password/salt
+      //                req.serviceRequest(
+      //                   "user_manager.new-user-password",
+      //                   {
+      //                      password: req.param("password"),
+      //                   },
+      //                   (err, results) => {
+      //                      if (err) {
+      //                         return done(err);
+      //                      }
+      //                      Object.keys(results).forEach((k) => {
+      //                         AdminData[`##admin-${k}##`] = results[k];
+      //                      });
+      //                      done();
+      //                   }
+      //                );
+      //             },
+
+      //             // Create a new DB for the new tenant
+      //             // copy our utils/new_tenant.sql  to {tenant}.sql with details replaced
+      //             (done) => {
+      //                req.log("generating new tenant SQL");
+      //                fs.readFile(
+      //                   path.join(__dirname, "..", "utils", "new_tenant.sql"),
+      //                   "utf8",
+      //                   (err, contents) => {
+      //                      if (err) {
+      //                         return done(err);
+      //                      }
+
+      //                      // contents is a template that we must now fill out with our data
+      //                      Object.keys(AdminData).forEach((k) => {
+      //                         contents = contents.replaceAll(k, AdminData[k]);
+      //                      });
+
+      //                      fileName = `new-${req.param("key")}.sql`;
+      //                      fs.writeFile(fileName, contents, (err) => {
+      //                         if (err) {
+      //                            return done(err);
+      //                         }
+      //                         done();
+      //                      });
+      //                   }
+      //                );
+      //             },
+
+      //             //// This works, but is SLOW:
+      //             // mysql import the {tenant}.sql
+      //             /*            (done) => {
+      //                req.log("Importing new tenant SQL");
+
+      //                var dbConfig = req.configDB();
+      //                var config = {
+      //                   host: dbConfig.host,
+      //                   user: dbConfig.user,
+      //                   password: dbConfig.password,
+      //                };
+      //                var importer = new Importer(config);
+      //                importer.onProgress((progress) => {
+      //                   var percent =
+      //                      Math.floor(
+      //                         (progress.bytes_processed / progress.total_bytes) *
+      //                            10000
+      //                      ) / 100;
+      //                   req.log(`${percent}% Completed`);
+      //                });
+
+      //                importer
+      //                   .import(fileName)
+      //                   .then(() => {
+      //                      req.log("Tables Created");
+      //                      done();
+      //                   })
+      //                   .catch((err) => {
+      //                      done(err);
+      //                   });
+      //             },
+
+      // */
+
+      //             // Let's try to manually prepare the data and send it our own way:
+      //             //
+
+      //             // mysql import the {tenant}.sql
+      //             (done) => {
+      //                req.log("Importing new tenant SQL");
+
+      //                fs.readFile(fileName, "utf8", (err, contents) => {
+      //                   if (err) {
+      //                      return done(err);
+      //                   }
+
+      //                   // Reformat the C-style comments from mysqlDump
+      //                   // contents = contents.replaceAll(/\/\*!\d*/g, "").replaceAll(/\*\//g, "");
+      //                   // Remove the C-Style comments from mysqldump
+      //                   contents = contents.replaceAll(/\/\*!\d*.*\*\/;*/g, "");
+
+      //                   // Remove the # comments
+      //                   contents = contents.replaceAll(/[^"]#.*/g, "");
+
+      //                   // temp confuse the &nbsp; -> &nbsp###
+      //                   // the ";" will interrupt our next step of breaking things into
+      //                   // our base sql commands;
+      //                   contents = contents.replaceAll("&nbsp;", "&nbsp###");
+
+      //                   // break into commands:
+      //                   var commands = contents.split(";");
+
+      //                   sqlCommands(commands, req, (err) => {
+      //                      done(err);
+      //                   });
+      //                });
+      //             },
+      //          ],
+      //          (err) => {
+      //             req.log("Done, preparing response");
+      //             if (err) {
+      //                console.error(err);
+      //                return cb(err);
+      //             }
+      //             cb(null, { status: "success" });
+      //          }
+      //       );
    },
 };
 

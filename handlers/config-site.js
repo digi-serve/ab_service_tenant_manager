@@ -3,6 +3,7 @@
  * return the bootstrap information needed for the given tenant.
  */
 
+const getSiteConfigValue = require("../queries/getSiteConfig.js");
 const TMConfig = require("./config.js");
 const TMList = require("./list.js");
 
@@ -75,6 +76,7 @@ async function BuildConfig(req, config) {
    allRequests.push(RequestLabels(req, config));
    allRequests.push(RequestLanguages(req, config));
    allRequests.push(RequestConfigMeta(req, config));
+   allRequests.push(GetPrivacyPolicy(req, config));
    await Promise.all(allRequests);
 
    // @TODO: figure out if we, in practice need, to update these:
@@ -149,4 +151,14 @@ function RequestConfigMeta(req, config) {
          resolve();
       });
    });
+}
+
+async function GetPrivacyPolicy(req, config) {
+   try {
+      const link = await getSiteConfigValue(req, "privacy-policy");
+      config.site = config.site ?? {};
+      config.site.privacyPolicy = link;
+   } catch (err) {
+      // It's ok, the site might not have this key set;
+   }
 }

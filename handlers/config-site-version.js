@@ -1,13 +1,10 @@
 /**
- * config-site-verstion
+ * config-site-version
  * return the bootstrap version information needed for the given tenant.
  */
 
+const { ConfigVersionCache } = require("../utils/cache.js");
 const TMConfigSite = require("./config-site.js");
-
-var CacheVersion = {
-   /* tenantID : "config version hash" */
-};
 
 /**
  * @function hashCode()
@@ -65,7 +62,7 @@ module.exports = {
       req.log("tenant_manager.config-site-version()");
       try {
          let tenantID = req.tenantID();
-         let version = CacheVersion[tenantID];
+         let version = ConfigVersionCache[tenantID];
          if (!version) {
             await new Promise((resolve, reject) => {
                TMConfigSite.fn(req, (err, result) => {
@@ -74,7 +71,7 @@ module.exports = {
                      result = JSON.stringify(result);
                   }
                   version = new String(hashCode(result)).toString();
-                  CacheVersion[tenantID] = version;
+                  ConfigVersionCache[tenantID] = version;
                   resolve();
                });
             });

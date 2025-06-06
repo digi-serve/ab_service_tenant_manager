@@ -1,6 +1,6 @@
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/digi-serve/ab_service_tenant_manager/pr-merge-release.yml?logo=github&label=Test%20%26%20Build)](https://github.com/digi-serve/ab_service_tenant_manager/actions/workflows/pr-merge-release.yml)
-[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/digi-serve/ab_service_tenant_manager?logo=github&label=Latest%20Version&link=https%3A%2F%2Fgithub.com%2Fdigi-serve%2Fab_service_tenant_manager%2Freleases)
-](https://github.com/digi-serve/ab_service_tenant_manager/releases)
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/CruGlobal/ab_service_tenant_manager/pr-merge-release.yml?logo=github&label=Test%20%26%20Build)](https://github.com/CruGlobal/ab_service_tenant_manager/actions/workflows/pr-merge-release.yml)
+[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/CruGlobal/ab_service_tenant_manager?logo=github&label=Latest%20Version&link=https%3A%2F%2Fgithub.com%2FCruGlobal%2Fab_service_tenant_manager%2Freleases)
+](https://github.com/CruGlobal/ab_service_tenant_manager/releases)
 [![Docker Pulls](https://img.shields.io/docker/pulls/digiserve/ab-tenant-manager?logo=docker&logoColor=white&label=Docker%20Pulls)](https://hub.docker.com/r/digiserve/ab-tenant-manager)
 [![Image Size](https://img.shields.io/docker/image-size/digiserve/ab-tenant-manager/master?logo=docker&logoColor=white&label=Image%20Size)](https://hub.docker.com/r/digiserve/ab-tenant-manager/tags)
 
@@ -8,7 +8,7 @@
 An AppBuilder service to manage the site&#39;s tenants.
 
 ## Install
-See [ab_cli](https://github.com/digi-serve/ab-cli)
+See [ab_cli](https://github.com/CruGlobal/ab-cli)
 
 ## Pull Requests
 Pull Requests should be tagged with a label `major`, `minor` or `patch`. Use `major` for breaking changes, `minor` for new features, or `patch` for bug fixes. To merge without creating a release a `no_release` tag can be added instead.
